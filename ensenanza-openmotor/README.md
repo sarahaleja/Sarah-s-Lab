@@ -210,15 +210,6 @@ pico de presión que el modelo **no predice**.
 
 ---
 
-## 7. Seguridad
-
-Este material es para **simulación y docencia**. Fabricar y encender motores de propelente sólido
-exige formación, permisos y supervisión según la normativa local y la de las asociaciones de
-cohetería (NAR, TRA o sus equivalentes nacionales). Una simulación de openMotor **no** reemplaza el
-cálculo estructural de la carcasa ni los ensayos estáticos.
-
----
-
 *Referencias:* código de openMotor (`motorlib/motor.py`, `propellant.py`, `nozzle.py`); R. Nakka,
 *Richard Nakka's Experimental Rocketry Web Site* (datos del KNSB); Sutton & Biblarz, *Rocket
 Propulsion Elements*, caps. 3, 12 y 13.
