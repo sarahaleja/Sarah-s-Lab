@@ -6,9 +6,12 @@ Impresora: Creality (FDM, boquilla 0.4 mm) · Material: PLA.
 Modelos (sólidos de revolución completos, con detalles):
   1. Motor cohete de propelente sólido experimental (tipo prueba estática):
      tobera convergente-divergente, retenedor, roscas, cámara, tapón e ignitor.
-  2. Motor de ciclo de combustión por etapas inspirado en el Raptor 1:
+  2. Motor de ciclo de combustión por etapas inspirado en el Raptor:
      campana, anillo colector, cámara con anillos, brida, cabezal con
      turbobombas, inyectores y tuberías.
+
+Textos en relieve: "RAPTOR 3" + "AESS UNICAUCA" (campana del Raptor) y
+"AESS / UNICAUCA" (cámara del motor sólido).
 
 Estrategia de impresión (sin soportes):
   * Se imprimen DE PIE: salida de la tobera sobre la cama, anilla arriba.
@@ -26,12 +29,20 @@ from pathlib import Path
 import numpy as np
 import manifold3d as m3d
 import trimesh
+from matplotlib.textpath import TextPath
+from matplotlib.font_manager import FontProperties
 
 OUT = Path(__file__).parent / "stl"
 SEG = 128                      # segmentos de revolución
 DENSIDAD_PLA = 1.24            # g/cm³
 M = m3d.Manifold
 CS = m3d.CrossSection
+
+# Texto en relieve
+FUENTE = FontProperties(family="DejaVu Sans", weight="bold")
+RELIEVE = 0.45                 # mm que sobresale el texto
+EMPOTRADO = 0.5                # mm que entra en la pieza (unión robusta)
+ENGROSE = 0.12                 # mm por lado: trazos ≥ 0.8 mm para boquilla 0.4
 
 
 # ------------------------------------------------------------- utilidades 2D
@@ -116,6 +127,46 @@ def anilla(z_base, r_ext=4.0, r_int=2.0, espesor=3.4, cuello=2.0, base=6.0):
     return sol.rotate([90, 0, 0]).translate([0, 0, z_base])   # (x,y,z)->(x,-z,y)
 
 
+# ------------------------------------------------------------- texto
+def texto_2d(lineas, altura_mayus, interlineado=1.45):
+    """Polígonos 2D del texto (u = sentido de lectura, v = arriba), centrados.
+    altura_mayus = altura de las mayúsculas en mm."""
+    em = altura_mayus / 0.729                   # DejaVu Sans Bold: mayúscula = 0.729 em
+    cs = None
+    for k, linea in enumerate(lineas):
+        tp = TextPath((0, 0), linea, size=em, prop=FUENTE)
+        polys = [p for p in tp.to_polygons() if len(p) > 2]
+        c = CS([pp.tolist() for pp in polys], m3d.FillRule.EvenOdd)
+        (x0, y0), (x1, y1) = np.array(c.bounds()).reshape(2, 2) if len(c.bounds()) == 4 else c.bounds()
+        c = c.translate([-(x0 + x1) / 2, -k * altura_mayus * interlineado])
+        cs = c if cs is None else cs + c
+    cs = cs.offset(ENGROSE, m3d.JoinType.Round)
+    (x0, y0, x1, y1) = cs.bounds()
+    return cs.translate([-(x0 + x1) / 2, -(y0 + y1) / 2])
+
+
+def texto_envuelto(lineas, altura_mayus, radio_en_z, z_centro, theta_c, vertical=False):
+    """Texto en relieve envuelto sobre una superficie de revolución r = radio_en_z(z).
+    horizontal: se lee alrededor del motor; vertical: se lee de abajo hacia arriba."""
+    cs = texto_2d(lineas, altura_mayus)
+    losa = M.extrude(cs, EMPOTRADO + RELIEVE).refine_to_length(0.35)
+    R_ref = radio_en_z(z_centro)
+
+    def deformar(v):
+        v = np.array(v, dtype=float, copy=True)
+        u, w, h = v[:, 0], v[:, 1], v[:, 2]
+        if vertical:                          # u → eje del motor, w (arriba de la letra) → izquierda
+            z = z_centro + u
+            th = theta_c - w / R_ref
+        else:
+            z = z_centro + w
+            th = theta_c + u / R_ref
+        r = radio_en_z(z) - EMPOTRADO + h
+        return np.c_[r * np.cos(th), r * np.sin(th), z]
+
+    return losa.warp_batch(deformar)
+
+
 # ------------------------------------------------------------- modelo 1
 def motor_solido():
     """Motor de propelente sólido experimental (≈ 15 × 64 mm)."""
@@ -141,7 +192,10 @@ def motor_solido():
     # P = 1.5 mm, e = 0.22 mm  →  ≈ 43°.
     roscas = (rosca(16.6, 3.9, Rb - 0.39, Rb + 0.05, paso=1.5) +
               rosca(43.8, 4.1, Rb - 0.39, Rb + 0.05, paso=1.5))
-    cuerpo = (exterior + roscas) - hueco
+    # "AESS / UNICAUCA" en dos líneas a lo largo de la cámara (z 20.2–43.8)
+    texto = texto_envuelto(["AESS", "UNICAUCA"], 2.7, lambda z: np.full_like(z, Rb),
+                           z_centro=32.0, theta_c=np.radians(90), vertical=True)
+    cuerpo = (exterior + roscas + texto) - hueco
     return cuerpo + anilla(56.3, base=3.2)
 
 
@@ -150,6 +204,8 @@ def motor_raptor():
     """Motor de combustión por etapas de metano (inspirado en Raptor 1),
     ≈ 26 × 62 mm."""
     campana_ext = bezier([12.6, 0.0], [11.6, 11.0], [8.6, 17.0], 50)
+    _cb = bezier([12.6, 0.0], [11.6, 11.0], [8.6, 17.0], 400)
+    radio_campana = lambda z: np.interp(z, _cb[:, 1], _cb[:, 0])
     exterior = revolve(
         [12.6, 0.0],
         campana_ext,                          # campana (bell)
@@ -190,13 +246,18 @@ def motor_raptor():
     # (por fuera de los aros de la cámara para no crear túneles)
     detalles.append(tuberia([(-6.4, -6.0, 18.0), (-6.0, -5.8, 23.0), (-5.9, -5.7, 28.0),
                              (-5.6, -5.4, 33.0), (-5.4, -5.2, 35.6)], 0.9))
+    # textos en relieve sobre la campana, del lado opuesto a la tubería principal
+    detalles.append(texto_envuelto(["RAPTOR 3"], 3.4, radio_campana, z_centro=9.3,
+                                   theta_c=np.radians(180)))
+    detalles.append(texto_envuelto(["AESS UNICAUCA"], 2.6, radio_campana, z_centro=3.4,
+                                   theta_c=np.radians(180)))
     cuerpo = M.batch_boolean([exterior] + detalles, m3d.OpType.Add) - hueco
     return cuerpo + anilla(50.2)
 
 
 MODELOS = {
-    "llavero_motor_solido_experimental": motor_solido,
-    "llavero_motor_metano_estilo_raptor": motor_raptor,
+    "llavero_motor_solido_aess_unicauca": motor_solido,
+    "llavero_motor_raptor3_aess_unicauca": motor_raptor,
 }
 
 

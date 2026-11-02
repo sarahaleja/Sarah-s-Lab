@@ -38,11 +38,13 @@ def render(m, elev=40, azim=-35, px=14):
     return np.clip(img[::-1], 0, 1)
 
 stls = sorted((D / "stl").glob("*.stl"))
-vistas = [(40, -35, "vista superior"), (-50, -35, "desde abajo: tobera hueca")]
+FRENTE = {"raptor": 90, "solido": 180}   # azimut que muestra el texto
+vistas = [(12, None, "frente: texto"), (-50, -35, "desde abajo: tobera hueca")]
 fig, axs = plt.subplots(len(vistas), len(stls), figsize=(4.4 * len(stls), 6.2 * len(vistas)), facecolor="white")
 for j, f in enumerate(stls):
     m = trimesh.load(f)
     for i, (el, az, txt) in enumerate(vistas):
+        az = az if az is not None else next(v for k, v in FRENTE.items() if k in f.stem)
         ax = axs[i][j]; ax.imshow(render(m, el, az)); ax.axis("off")
         ax.set_title(f.stem.replace("llavero_", "").replace("_", " ") + f"\n({txt})", fontsize=11)
 plt.tight_layout(); plt.savefig(D / "preview.png", dpi=90)

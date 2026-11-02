@@ -4,10 +4,14 @@ Dos llaveros **redondos en 3D completo** para imprimir en una **Creality (FDM) c
 
 ![preview](preview.png)
 
+**Textos en relieve** (detalle):
+
+![texto](texto_detalle.png)
+
 | Archivo (`stl/`) | Motor | Tamaño (Ø × alto) | PLA aprox.* |
 |---|---|---|---|
-| `llavero_motor_solido_experimental.stl` | Motor de propelente sólido de prueba estática: tobera convergente-divergente, retenedor, roscas, cámara, tapón y sellante con ignitor | 15 × 66 mm | ~5 g |
-| `llavero_motor_metano_estilo_raptor.stl` | Motor de metano de combustión por etapas (inspirado en el Raptor 1): campana, colector regenerativo, cámara con anillos, brida, inyectores, 2 turbobombas y 2 tuberías | 25 × 60 mm | ~5,5 g |
+| `llavero_motor_solido_aess_unicauca.stl` | Motor de propelente sólido de prueba estática: tobera convergente-divergente, retenedor, roscas, cámara, tapón y sellante con ignitor. Texto **AESS / UNICAUCA** a lo largo de la cámara | 15 × 66 mm | ~5 g |
+| `llavero_motor_raptor3_aess_unicauca.stl` | Motor de metano de combustión por etapas (inspirado en el Raptor): campana, colector regenerativo, cámara con anillos, brida, inyectores, 2 turbobombas y 2 tuberías. Texto **RAPTOR 3** y **AESS UNICAUCA** alrededor de la campana | 25 × 60 mm | ~5,5 g |
 
 \*Con 3–4 paredes y 20 % de relleno. Macizos pesan unos 7,4 y 7,9 g.
 
@@ -16,13 +20,14 @@ Se imprimen **de pie**, con la salida de la tobera sobre la cama y la anilla arr
 - **Tobera hueca, como la real.** La cavidad se estrecha al subir (semiángulo ≤ 44°), así que se sostiene sola.
 - **Sin voladizos de más de 45°.** Hay chaflanes a 45° bajo el tapón, la brida y el retenedor. Los anillos tienen perfil de "gota", las turbobombas tienen base cónica y las tuberías son casi verticales (≤ 25°).
 - **Rosca helicoidal senoidal** r(θ,z) = R₀ + e·cos(θ − 2πz/P). La pendiente máxima del flanco es 2πe/P. Con P = 1,5 mm y e = 0,22 mm sale ≈ 43°, así que no necesita soporte.
+- **Texto en relieve de 0,45 mm** (DejaVu Sans Bold), envuelto sobre la superficie y empotrado 0,5 mm para que no se despegue. Los trazos se engrosaron 0,12 mm por lado para que midan ≥ 0,8 mm (2 líneas de una boquilla de 0,4). El borde inferior de cada letra es un voladizo horizontal de 0,45 mm, que el FDM imprime sin problema.
 - **Agujero de la anilla en forma de gota** (punta arriba). Se imprime horizontal sin soporte y admite una anilla partida (Ø 4 mm).
-- **Mallas validadas.** Son estancas (*watertight*) y de 1 cuerpo. El género topológico cuadra con el diseño: 1 en el motor sólido (anilla) y 3 en el Raptor (anilla + 2 tuberías). Superficie con voladizo mayor de 50°: 0,3 mm² y 3 mm².
+- **Mallas validadas.** Son estancas (*watertight*) y de 1 cuerpo. El género topológico cuadra con el diseño: 1 en el motor sólido (anilla) y 3 en el Raptor (anilla + 2 tuberías). Fuera del texto, el voladizo mayor de 50° es de 0,3 mm² y 3 mm².
 
 ## Ajustes recomendados (Creality Print / Cura / OrcaSlicer)
 | Parámetro | Valor |
 |---|---|
-| Capa | **0,12 mm** (detalle de roscas y anillos); 0,16 mm como mínimo |
+| Capa | **0,12 mm** (detalle de texto, roscas y anillos); 0,16 mm como máximo |
 | Paredes | 3–4 |
 | Relleno | 20 % giroide |
 | Temperatura | 200–210 °C boquilla · 60 °C cama |
