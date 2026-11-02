@@ -1,42 +1,45 @@
-# Llaveros — motores de cohete experimentales 🚀
+# Llaveros 3D: motores de cohete experimentales 🚀
 
-Cuatro llaveros pequeños (≈ 4–5,5 cm) para imprimir en **impresora Creality (FDM) con PLA**.
+Dos llaveros **redondos en 3D completo** para imprimir en una **Creality (FDM) con PLA**, sin soportes.
 
 ![preview](preview.png)
 
-| Archivo (`stl/`) | Motor | Tamaño X×Y×Z (mm) | PLA aprox.* |
+| Archivo (`stl/`) | Motor | Tamaño (Ø × alto) | PLA aprox.* |
 |---|---|---|---|
-| `llavero_motor_campana.stl` | Motor líquido con tobera de campana (tipo Rao) + camisa regenerativa | 20 × 55 × 10 | ~2,4 g |
-| `llavero_tobera_doble_campana.stl` | Tobera *dual-bell*: inflexión que da dos modos de altitud | 20 × 54 × 10 | ~2,3 g |
-| `llavero_aerospike.stl` | Aerospike anular truncado: se autocompensa con la altitud | 20 × 56 × 10 | ~2,5 g |
-| `llavero_motor_detonacion_rotativa.stl` | RDE: canal anular de detonación + cuerpo central tipo *plug* | 17 × 44 × 8,5 | ~2,0 g |
+| `llavero_motor_solido_experimental.stl` | Motor de propelente sólido de prueba estática: tobera convergente-divergente, retenedor, roscas, cámara, tapón y sellante con ignitor | 15 × 66 mm | ~5 g |
+| `llavero_motor_metano_estilo_raptor.stl` | Motor de metano de combustión por etapas (inspirado en el Raptor 1): campana, colector regenerativo, cámara con anillos, brida, inyectores, 2 turbobombas y 2 tuberías | 25 × 60 mm | ~5,5 g |
 
-\*Con 4 paredes y 20 % de relleno. Macizo pesan 3–3,8 g.
+\*Con 3–4 paredes y 20 % de relleno. Macizos pesan unos 7,4 y 7,9 g.
 
-## Diseño: por qué tienen la espalda plana
-Cada motor es **medio sólido de revolución**: el perfil se gira 180° alrededor del eje y la cara de corte queda sobre la cama.
-- **Sin soportes.** Todas las superficies crecen desde la cama.
-- **Anilla resistente.** La pestaña es horizontal, así que el tirón del aro va *a lo largo* de las capas y no las separa. Es el modo de falla típico del PLA impreso en vertical.
-- **Validado.** Cada malla es estanca (*watertight*), de 1 solo cuerpo y con un único agujero (género 1). Todo apoya en z = 0.
+## Ingeniería de imprimibilidad
+Se imprimen **de pie**, con la salida de la tobera sobre la cama y la anilla arriba.
+- **Tobera hueca, como la real.** La cavidad se estrecha al subir (semiángulo ≤ 44°), así que se sostiene sola.
+- **Sin voladizos de más de 45°.** Hay chaflanes a 45° bajo el tapón, la brida y el retenedor. Los anillos tienen perfil de "gota", las turbobombas tienen base cónica y las tuberías son casi verticales (≤ 25°).
+- **Rosca helicoidal senoidal** r(θ,z) = R₀ + e·cos(θ − 2πz/P). La pendiente máxima del flanco es 2πe/P. Con P = 1,5 mm y e = 0,22 mm sale ≈ 43°, así que no necesita soporte.
+- **Agujero de la anilla en forma de gota** (punta arriba). Se imprime horizontal sin soporte y admite una anilla partida (Ø 4 mm).
+- **Mallas validadas.** Son estancas (*watertight*) y de 1 cuerpo. El género topológico cuadra con el diseño: 1 en el motor sólido (anilla) y 3 en el Raptor (anilla + 2 tuberías). Superficie con voladizo mayor de 50°: 0,3 mm² y 3 mm².
 
 ## Ajustes recomendados (Creality Print / Cura / OrcaSlicer)
 | Parámetro | Valor |
 |---|---|
-| Boquilla / capa | 0,4 mm / **0,12–0,16 mm**: las curvas de las toberas salen mucho más suaves |
-| Paredes | **4** (o relleno 100 %; son piezas pequeñas) |
-| Relleno | 20–30 % giroide |
-| Temperatura | 200–210 °C boquilla, 60 °C cama |
+| Capa | **0,12 mm** (detalle de roscas y anillos); 0,16 mm como mínimo |
+| Paredes | 3–4 |
+| Relleno | 20 % giroide |
+| Temperatura | 200–210 °C boquilla · 60 °C cama |
+| Ventilador | 100 % desde la capa 3 |
 | Soportes | **Ninguno** |
-| Adhesión | Borde (*brim*) de 3 mm, recomendado para la punta fina del aerospike |
-| Orientación | Tal como viene: cara plana abajo |
+| Adhesión | **Borde (brim) de 4–5 mm**: la base es un anillo fino (tobera hueca) y la pieza es alta |
+| Velocidad | Baja (≤ 40 mm/s), o "tiempo mínimo de capa" ≥ 8 s, porque las capas superiores son pequeñas |
 
-Anilla: agujero de Ø 5 mm, compatible con anillas partidas estándar de 20–25 mm.
+> Consejo: imprime 2 o 3 a la vez, separados en la cama. Así cada capa tiene tiempo de enfriarse y el detalle superior sale más nítido.
 
 ## Modificar / regenerar
-Todo es paramétrico (radios de garganta, salida, cámara, tamaño de la pestaña…):
+Todo es paramétrico: radios de garganta y salida, paso de rosca, tamaño de la anilla, etc.
 ```bash
 pip install manifold3d trimesh numpy matplotlib
-python3 generar_llaveros.py   # escribe stl/*.stl e imprime dimensiones, volumen y masa
+python3 generar_llaveros.py   # escribe stl/*.stl y muestra medidas, masa y validación
 python3 render_preview.py     # regenera preview.png
 ```
-Para escalar un modelo, basta escalarlo en el slicer (p. ej. al 80 %). No bajes la garganta de ~2,5 mm de radio para que no quede frágil.
+Para hacerlos más pequeños, escálalos en el slicer (p. ej. al 80 %). La pared de la tobera mide 1,1–1,6 mm, así que no conviene bajar del 70 %.
+
+Los modelos anteriores de "medio relieve" (espalda plana) siguen en el historial de git (commit `Add rocket-engine keychain 3D models`).

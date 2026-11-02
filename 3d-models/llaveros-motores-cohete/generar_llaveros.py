@@ -1,17 +1,26 @@
 """
-Llaveros de motores de cohete experimentales — generador paramétrico.
+Llaveros 3D de motores de cohete experimentales — generador paramétrico.
 
-Impresora objetivo: Creality (FDM, boquilla 0.4 mm) · Material: PLA.
+Impresora: Creality (FDM, boquilla 0.4 mm) · Material: PLA.
 
-Cada llavero es un "medio sólido de revolución": el perfil del motor se gira
-180° alrededor de su eje y la cara plana (el corte por el eje) queda apoyada
-en la cama. Ventajas para FDM:
-  * No necesita soportes (todas las superficies suben desde la cama).
-  * La anilla del llavero es una pestaña plana horizontal: el esfuerzo del
-    aro tira EN el plano de las capas, no las despega (máxima resistencia).
+Modelos (sólidos de revolución completos, con detalles):
+  1. Motor cohete de propelente sólido experimental (tipo prueba estática):
+     tobera convergente-divergente, retenedor, roscas, cámara, tapón e ignitor.
+  2. Motor de ciclo de combustión por etapas inspirado en el Raptor 1:
+     campana, anillo colector, cámara con anillos, brida, cabezal con
+     turbobombas, inyectores y tuberías.
 
-Unidades: milímetros. Ejecutar:  python3 generar_llaveros.py
-Requiere: pip install manifold3d trimesh numpy matplotlib
+Estrategia de impresión (sin soportes):
+  * Se imprimen DE PIE: salida de la tobera sobre la cama, anilla arriba.
+  * Toda superficie que mira hacia abajo tiene ≤ 45° respecto a la vertical
+    (chaflanes a 45°, anillos con perfil de "gota", conos, tuberías casi verticales).
+  * La tobera es HUECA por dentro (como la real) hasta la garganta: la cavidad
+    se estrecha al subir, así que se autosoporta.
+  * El agujero de la anilla tiene forma de gota (punta arriba) para imprimirse
+    horizontal sin soporte.
+
+Unidades: mm. Ejecutar:  python3 generar_llaveros.py
+Requiere: pip install manifold3d trimesh numpy
 """
 from pathlib import Path
 import numpy as np
@@ -19,142 +28,175 @@ import manifold3d as m3d
 import trimesh
 
 OUT = Path(__file__).parent / "stl"
-SEG = 160                      # segmentos de revolución (360°)
+SEG = 128                      # segmentos de revolución
 DENSIDAD_PLA = 1.24            # g/cm³
-
-# Pestaña de la anilla (común a todos los modelos)
-TAB_ESPESOR = 3.6              # mm (9 capas de 0.4 / 18 de 0.2)
-TAB_ANCHO = 11.0
-TAB_LARGO = 9.0                # cuánto sobresale del motor
-AGUJERO_D = 5.0                # cabe una anilla partida estándar
+M = m3d.Manifold
+CS = m3d.CrossSection
 
 
-# ---------------------------------------------------------------- utilidades
+# ------------------------------------------------------------- utilidades 2D
 def bezier(p0, p1, p2, n=40):
-    """Curva de Bézier cuadrática entre p0 y p2 con punto de control p1."""
     t = np.linspace(0, 1, n)[:, None]
     p0, p1, p2 = map(np.asarray, (p0, p1, p2))
     return (1 - t) ** 2 * p0 + 2 * (1 - t) * t * p1 + t ** 2 * p2
 
 
-def arco(c, r, a0, a1, n=24):
-    a = np.radians(np.linspace(a0, a1, n))
-    return np.c_[c[0] + r * np.cos(a), c[1] + r * np.sin(a)]
-
-
-def perfil(*tramos):
-    """Une tramos (r, z) en un polígono cerrado que toca el eje r=0."""
-    pts = np.vstack([np.atleast_2d(t) for t in tramos])
-    # elimina puntos duplicados consecutivos
+def revolve(*tramos):
+    """Revoluciona 360° un perfil (r, z) dado por tramos; se cierra por el eje."""
+    pts = np.vstack([np.atleast_2d(np.asarray(t, float)) for t in tramos])
     keep = np.r_[True, np.linalg.norm(np.diff(pts, axis=0), axis=1) > 1e-6]
     pts = pts[keep]
     pts = np.vstack([[0.0, pts[0, 1]], pts, [0.0, pts[-1, 1]]])
-    # orientación antihoraria para manifold
     area = 0.5 * np.sum(pts[:, 0] * np.roll(pts[:, 1], -1) - np.roll(pts[:, 0], -1) * pts[:, 1])
-    return pts if area > 0 else pts[::-1]
+    if area < 0:
+        pts = pts[::-1]
+    return M.revolve(CS([pts.tolist()]), SEG)
 
 
-def anillos(z_list, r, alto=0.8):
-    """Rectángulos (r,z) que añaden aros de refuerzo / colectores."""
-    return [np.array([[0, z], [r, z], [r, z + alto], [0, z + alto]]) for z in z_list]
+def anillo_gota(z, r_in, r_out, alto):
+    """Anillo con perfil de gota: chaflán inferior a 45° (imprimible) y
+    cara superior redondeada. Simula colectores y aros de refuerzo."""
+    d = r_out - r_in
+    zc = z + d                                   # el chaflán de 45° sube d
+    a = np.radians(np.linspace(-90, 90, 24))
+    rr = min(alto - d, d) if alto > d else d * 0.5
+    top = np.c_[r_out - rr + rr * np.cos(a), zc + (alto - d) - rr + rr * np.sin(a)]
+    top = top[top[:, 1] >= zc - 1e-9] if alto > d else np.array([[r_out, zc]])
+    pts = np.vstack([[r_in, z], [r_out, zc], top, [r_in, z + alto + 0.01]])
+    pts = np.vstack([[0, z], pts, [0, z + alto + 0.01]])
+    return M.revolve(CS([pts.tolist()]), SEG)
 
 
-def medio_revolucion(poligonos):
-    """Gira perfiles (r, z) 180° y los deja con la cara plana en z=0.
-    Ejes finales: Y = eje del motor (tobera en y=0), Z = altura sobre la cama."""
-    cs = m3d.CrossSection([p.tolist() for p in poligonos[:1]])
-    for p in poligonos[1:]:
-        cs = cs + m3d.CrossSection([p.tolist()])
-    sol = m3d.Manifold.revolve(cs, SEG, 180.0)          # eje → Z, mitad y≥0
-    # rotación +90° en X: (x, y, z) → (x, -z, y): eje del motor → -Y, mitad → +Z.
-    # Se refleja Y para que la tobera quede en y=0 y el inyector en +Y.
-    return sol.rotate([90.0, 0.0, 0.0]).mirror([0.0, 1.0, 0.0])
+def rosca(z, alto, r_raiz, r_cresta, paso=1.5):
+    """Rosca helicoidal de perfil senoidal: r(θ, z) = R0 + e·cos(θ − 2πz/P).
+    Pendiente máx. del flanco: |∂r/∂z| = 2πe/P  (≤ 1 → ≤ 45°, imprimible)."""
+    e = (r_cresta - r_raiz) / 2
+    R0 = r_raiz + e
+    cil = M.cylinder(alto, R0, R0, SEG).refine_to_length(0.12)
+
+    def deformar(v):
+        v = np.array(v, dtype=float, copy=True)
+        th = np.arctan2(v[:, 1], v[:, 0])
+        rr = np.hypot(v[:, 0], v[:, 1])
+        borde = rr > 1e-6
+        nuevo = R0 + e * np.cos(th - 2 * np.pi * v[:, 2] / paso)
+        f = np.where(borde, nuevo / np.where(borde, R0, 1), 1.0)
+        f = np.where(rr > R0 - 1e-3, f, 1 + (f - 1) * rr / R0)   # tapas: escala suave
+        v[:, 0] *= f
+        v[:, 1] *= f
+        return v
+
+    return cil.warp_batch(deformar).translate([0, 0, z])
 
 
-def pestana(y_iny):
-    """Pestaña plana con agujero, unida al extremo del inyector (y = y_iny),
-    creciendo hacia +Y (lejos de la tobera). Se solapa 4 mm con el domo."""
-    yc = y_iny + TAB_LARGO                     # centro del agujero
-    base = m3d.CrossSection.square([TAB_ANCHO, TAB_LARGO + 4]).translate([-TAB_ANCHO / 2, y_iny - 4])
-    punta = m3d.CrossSection.circle(TAB_ANCHO / 2, 96).translate([0, yc])
-    agujero = m3d.CrossSection.circle(AGUJERO_D / 2, 96).translate([0, yc])
-    return m3d.Manifold.extrude((base + punta) - agujero, TAB_ESPESOR)
+def cilindro(z, alto, r, x=0.0, y=0.0, base_conica=True):
+    """Cilindro vertical; si base_conica, su fondo es un cono a 45° (sin voladizo)."""
+    c = M.cylinder(alto, r, r, SEG // 2).translate([x, y, z])
+    if base_conica:
+        c = c + M.cylinder(r, 0.01, r, SEG // 2).translate([x, y, z - r])
+    return c
 
 
-def ensamblar(perfiles):
-    cuerpo = medio_revolucion(perfiles)
-    bb = cuerpo.bounding_box()            # (xmin, ymin, zmin, xmax, ymax, zmax)
-    y_iny = bb[4]                         # extremo del inyector (máx. Y)
-    llavero = cuerpo + pestana(y_iny)
-    return llavero.translate([0, -llavero.bounding_box()[1], 0])
+def tuberia(puntos, r):
+    """Tubería suave = unión de cápsulas (envolventes de esferas consecutivas)."""
+    esf = [M.sphere(r, 32).translate(list(p)) for p in puntos]
+    return M.batch_boolean([M.batch_hull([a, b]) for a, b in zip(esf, esf[1:])], m3d.OpType.Add)
 
 
-# ---------------------------------------------------------------- modelos
-def motor_campana():
-    """Motor de propelente líquido con tobera de campana (tipo Rao) y
-    camisa de refrigeración regenerativa (aros)."""
-    Re, Rt, Rc = 9.5, 3.6, 6.5            # radios: salida, garganta, cámara
-    tobera = bezier([Re, 0], [5.0, 9.0], [Rt + 0.4, 19.0])          # campana
-    garganta = arco([Rt + 2.0, 20.0], 2.0, 210, 150)                 # radio de garganta
-    convergente = bezier([Rt + 0.3, 21.6], [Rc, 24.0], [Rc, 27.0])
-    camara = np.array([[Rc, 35.0]])
-    domo = arco([0, 35.0], Rc, 0, 60)                                # placa inyectora
-    labio = np.array([[Re + 0.6, 0.0], [Re + 0.6, 1.0]])             # labio de salida
-    p = perfil(labio, tobera, garganta, convergente, camara, domo)
-    extras = anillos([27.5, 30.5, 33.5], Rc + 0.6) + anillos([12.0], 6.5, 0.9)
-    return ensamblar([p] + extras)
+def anilla(z_base, r_ext=4.0, r_int=2.0, espesor=3.4, cuello=2.0, base=6.0):
+    """Anilla vertical para el aro del llavero. Agujero en gota (punta arriba)
+    y exterior unido a la base por tangentes (sin voladizos > 45°)."""
+    h = cuello + r_ext                                   # centro del agujero
+    ext = CS.batch_hull([CS.circle(r_ext, 96).translate([0, h]),
+                         CS.square([base, 0.5]).translate([-base / 2, 0])])   # base ⊂ soporte
+    a = r_int / np.sqrt(2)
+    gota = CS.circle(r_int, 96) + CS([[[a, a], [0, 2 * a], [-a, a], [0, 0]]])
+    perfil = ext - gota.translate([0, h])
+    sol = M.extrude(perfil, espesor).translate([0, 0, -espesor / 2])
+    return sol.rotate([90, 0, 0]).translate([0, 0, z_base])   # (x,y,z)->(x,-z,y)
 
 
-def motor_doble_campana():
-    """Tobera de doble campana (dual-bell): la inflexión permite dos modos de
-    altitud — experimental para etapas que vuelan de mar a vacío."""
-    Re, Ri, Rt, Rc = 9.5, 6.4, 3.4, 6.2
-    ext = bezier([Re, 0], [8.4, 4.5], [Ri, 9.0])                     # 2ª campana
-    base = bezier([Ri, 9.0], [4.6, 13.0], [Rt + 0.3, 19.5])          # 1ª campana
-    garganta = arco([Rt + 1.8, 21.0], 1.8, 215, 145)
-    convergente = bezier([Rt + 0.4, 22.4], [Rc, 24.5], [Rc, 27.5])
-    domo = np.vstack([[Rc, 34.0], arco([0, 34.0], Rc, 0, 55)])
-    labio = np.array([[Re + 0.5, 0.0], [Re + 0.5, 0.9]])
-    p = perfil(labio, ext, base, garganta, convergente, domo)
-    extras = anillos([9.0], Ri + 0.7, 0.9) + anillos([28.5, 31.5], Rc + 0.5)
-    return ensamblar([p] + extras)
+# ------------------------------------------------------------- modelo 1
+def motor_solido():
+    """Motor de propelente sólido experimental (≈ 15 × 64 mm)."""
+    Rb = 6.0                                  # radio del cuerpo (cámara)
+    # tobera convergente-divergente (exterior) + retenedor
+    exterior = revolve(
+        [4.7, 0.0], [4.7, 0.6],               # labio de salida
+        [2.7, 8.0],                           # divergente
+        [2.7, 8.6],                           # garganta
+        [6.9, 12.8],                          # convergente (45°)
+        [7.1, 13.0], [7.1, 16.4],             # retenedor (pieza 3)
+        [Rb - 0.3, 17.2],                     # escalón hacia la rosca
+        [Rb - 0.3, 19.9], [Rb, 20.2],         # chaflán 45° (sin escalón)
+        [Rb, 44.0],                           # cámara de combustión (pieza 2)
+        [Rb - 0.3, 44.0], [Rb - 0.3, 47.6],   # zona roscada superior
+        [7.4, 49.3],                          # chaflán 45° bajo el tapón
+        [7.4, 50.4], [7.0, 50.8], [7.0, 51.6], [7.4, 52.0],   # ranura del tapón
+        [7.4, 53.6], [6.2, 54.8],             # hombro superior
+        [2.5, 54.8], [2.5, 56.5],             # sellante + ignitor (piezas 4/5)
+    )
+    hueco = revolve([3.6, -0.1], [3.6, 0.0], [1.05, 8.0], [0.0, 9.1])   # divergente hueco
+    # Rosca senoidal: pendiente máx. de flanco = 2πe/P ≤ 1  →  ≤ 45° (imprimible).
+    # P = 1.5 mm, e = 0.22 mm  →  ≈ 43°.
+    roscas = (rosca(16.6, 3.9, Rb - 0.39, Rb + 0.05, paso=1.5) +
+              rosca(43.8, 4.1, Rb - 0.39, Rb + 0.05, paso=1.5))
+    cuerpo = (exterior + roscas) - hueco
+    return cuerpo + anilla(56.3, base=3.2)
 
 
-def motor_aerospike():
-    """Aerospike anular truncado: cámara toroidal y espiga central que
-    se autocompensa con la altitud."""
-    Rcw, Rsp = 9.5, 6.0                  # radio de la carcasa y raíz de la espiga
-    espiga = bezier([1.6, 0.0], [2.6, 14.0], [Rsp, 26.0])           # espiga truncada
-    garganta = np.array([[Rsp + 0.6, 26.0], [Rsp + 0.6, 27.0]])     # salida anular
-    carcasa = np.array([[Rcw, 27.0], [Rcw, 36.0]])
-    domo = arco([0, 36.0], Rcw, 0, 35)
-    base_esp = np.array([[1.6, 0.0]])
-    p = perfil(base_esp, espiga, garganta, carcasa, domo)
-    # cámara/colector toroidal superior marcado
-    extras = anillos([29.0, 33.0], Rcw + 0.6, 1.0)
-    return ensamblar([p] + extras)
-
-
-def motor_detonacion_rotativa():
-    """Motor de detonación rotativa (RDE): cámara anular corta con cuerpo
-    central y tobera tipo tapón (plug) — un concepto en investigación activa."""
-    Ro, Rcb = 8.5, 5.5
-    plug = bezier([1.4, 0.0], [3.0, 7.0], [Rcb, 10.0])
-    cuerpo = np.array([[Rcb, 22.0]])
-    anillo_ext = np.array([[Ro, 10.0], [Ro, 22.0]])
-    domo = np.vstack([[Ro, 24.0], arco([0, 24.0], Ro, 0, 40)])
-    p_plug = perfil(np.array([[1.4, 0.0]]), plug, cuerpo, np.array([[Rcb, 24.0]]), domo)
-    # carcasa exterior separada por la ranura anular (canal de detonación)
-    carcasa = np.array([[Rcb + 1.2, 10.0], [Ro, 10.0], [Ro, 24.0], [Rcb + 1.2, 24.0]])
-    inyectores = anillos([25.5, 28.0], 4.0, 1.0)
-    return ensamblar([p_plug, carcasa] + inyectores)
+# ------------------------------------------------------------- modelo 2
+def motor_raptor():
+    """Motor de combustión por etapas de metano (inspirado en Raptor 1),
+    ≈ 26 × 62 mm."""
+    campana_ext = bezier([12.6, 0.0], [11.6, 11.0], [8.6, 17.0], 50)
+    exterior = revolve(
+        [12.6, 0.0],
+        campana_ext,                          # campana (bell)
+        [6.8, 19.5],                          # hombro sobre el colector
+        [4.6, 25.0],                          # parte superior de la tobera
+        [4.4, 26.6],                          # garganta
+        [6.0, 28.2],                          # expansión 45° hacia la cámara
+        [6.0, 33.0],                          # cámara de combustión
+        [9.2, 36.2], [9.2, 37.6],             # brida (chaflán 45° abajo)
+        [7.0, 38.4], [6.6, 38.4],
+        [6.6, 45.0],                          # cabezal / inyector
+        [4.6, 46.0], [4.6, 48.4],             # domo superior
+        [3.6, 49.0], [3.6, 50.4],             # cardán (gimbal)
+    )
+    hueco = revolve([11.0, -0.1], [11.0, 0.0],
+                    bezier([11.0, 0.0], [9.6, 12.0], [5.6, 19.0], 40),
+                    [2.6, 23.4], [0.0, 25.9])          # interior de la campana
+    detalles = [
+        anillo_gota(16.6, 8.0, 9.4, 2.6),     # colector de refrigeración regenerativa
+        anillo_gota(23.4, 4.6, 5.6, 1.4),     # anillo superior de tobera
+        anillo_gota(29.0, 5.8, 6.7, 1.2),     # aros de la cámara
+        anillo_gota(31.4, 5.8, 6.7, 1.2),
+        anillo_gota(41.6, 6.4, 7.2, 1.0),     # aro del cabezal
+    ]
+    # inyectores/válvulas alrededor del cabezal, apoyados sobre la brida
+    for k in range(20):
+        ang = 360 * k / 20
+        if any(abs(((ang - b + 180) % 360) - 180) < 32 for b in (0, 133)):   # turbobombas
+            continue
+        detalles.append(M.cube([1.2, 0.7, 2.4]).translate([6.4, -0.35, 37.6]).rotate([0, 0, ang]))
+    # turbobombas (dos) laterales, base cónica a 45°
+    detalles += [cilindro(37.0, 7.0, 2.7, x=7.4, y=0.0), cilindro(44.0, 1.0, 2.1, x=7.4, y=0.0)]
+    detalles += [cilindro(36.5, 6.5, 2.2, x=-5.0, y=5.4), cilindro(43.0, 0.8, 1.7, x=-5.0, y=5.4)]
+    # tubería principal: de la turbobomba al colector (casi vertical, ≤ 25°)
+    detalles.append(tuberia([(9.2, 0, 18.0), (10.6, 0.8, 24.0), (10.9, 0.6, 29.0),
+                             (10.0, 0.0, 33.5), (8.4, 0.0, 37.5)], 1.35))
+    # tubería secundaria
+    # (por fuera de los aros de la cámara para no crear túneles)
+    detalles.append(tuberia([(-6.4, -6.0, 18.0), (-6.0, -5.8, 23.0), (-5.9, -5.7, 28.0),
+                             (-5.6, -5.4, 33.0), (-5.4, -5.2, 35.6)], 0.9))
+    cuerpo = M.batch_boolean([exterior] + detalles, m3d.OpType.Add) - hueco
+    return cuerpo + anilla(50.2)
 
 
 MODELOS = {
-    "llavero_motor_campana": motor_campana,
-    "llavero_tobera_doble_campana": motor_doble_campana,
-    "llavero_aerospike": motor_aerospike,
-    "llavero_motor_detonacion_rotativa": motor_detonacion_rotativa,
+    "llavero_motor_solido_experimental": motor_solido,
+    "llavero_motor_metano_estilo_raptor": motor_raptor,
 }
 
 
@@ -165,11 +207,13 @@ def a_trimesh(m):
 
 if __name__ == "__main__":
     OUT.mkdir(exist_ok=True)
-    print(f"{'modelo':38s} {'X×Y×Z (mm)':>20s} {'vol cm³':>8s} {'g PLA*':>7s} estanco")
+    print(f"{'modelo':38s} {'X×Y×Z (mm)':>20s} {'vol cm³':>8s} {'g PLA*':>7s} estanco cuerpos género")
     for nombre, fn in MODELOS.items():
-        tm = a_trimesh(fn())
+        sol = fn()
+        tm = a_trimesh(sol)
         tm.export(OUT / f"{nombre}.stl")
         dx, dy, dz = tm.extents
         vol = tm.volume / 1000
-        print(f"{nombre:38s} {dx:5.1f}×{dy:5.1f}×{dz:5.1f}    {vol:8.2f} {vol*DENSIDAD_PLA:7.2f} {tm.is_watertight}")
-    print("* masa sólida al 100 %; con 4 paredes + 20 % relleno es ~60-70 % de eso.")
+        print(f"{nombre:38s} {dx:5.1f}×{dy:5.1f}×{dz:5.1f}    {vol:8.2f} {vol*DENSIDAD_PLA:7.2f} "
+              f"{str(tm.is_watertight):7s} {len(sol.decompose()):7d} {sol.genus():6d}  zmin={tm.bounds[0,2]:.2f}")
+    print("* masa maciza; con 3-4 paredes + 20 % relleno es ~65-80 % de eso.")

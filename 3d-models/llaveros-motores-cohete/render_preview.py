@@ -38,8 +38,11 @@ def render(m, elev=40, azim=-35, px=14):
     return np.clip(img[::-1], 0, 1)
 
 stls = sorted((D / "stl").glob("*.stl"))
-fig, axs = plt.subplots(1, len(stls), figsize=(4.2 * len(stls), 6.5), facecolor="white")
-for ax, f in zip(axs, stls):
-    ax.imshow(render(trimesh.load(f))); ax.axis("off")
-    ax.set_title(f.stem.replace("llavero_", "").replace("_", " "), fontsize=12)
-plt.tight_layout(); plt.savefig(D / "preview.png", dpi=100)
+vistas = [(40, -35, "vista superior"), (-50, -35, "desde abajo: tobera hueca")]
+fig, axs = plt.subplots(len(vistas), len(stls), figsize=(4.4 * len(stls), 6.2 * len(vistas)), facecolor="white")
+for j, f in enumerate(stls):
+    m = trimesh.load(f)
+    for i, (el, az, txt) in enumerate(vistas):
+        ax = axs[i][j]; ax.imshow(render(m, el, az)); ax.axis("off")
+        ax.set_title(f.stem.replace("llavero_", "").replace("_", " ") + f"\n({txt})", fontsize=11)
+plt.tight_layout(); plt.savefig(D / "preview.png", dpi=90)
