@@ -22,12 +22,12 @@ KGF_CM2_A_PA = 98066.5       # 1 kgf/cm2 en Pa
 # ---------------------------------------------------------------------------
 # Temperaturas de referencia
 # ---------------------------------------------------------------------------
-T0 = Param("T0, temperatura inicial", 298.15, "K", "Escenario", "supuesto")
+T0 = Param("T0, temperatura inicial", 298.15, "K", "Escenario", "supuesto", cierre="escenario")
 
 Tm = Param(
     "Tm, temperatura de fusión nominal", 600.0, "K",
     "Wu et al. (2025); Starkweather et al. (1982): 602 K refundido, 619 K virgen",
-    "acotado", rango=(600.0, 619.0),
+    "acotado", cierre="fisica", rango=(600.0, 619.0),
     nota="La fusión real se distribuye en 513-633 K (Blumm et al., 2010).",
 )
 
@@ -38,42 +38,42 @@ RHO_S_PUNTOS = ((295.0, 2161.0), (423.0, 2041.0))   # Blumm et al. (2010)
 
 rho_s_corr = Correlacion(
     "rho_s(T)", "interpolación lineal entre 2161 kg/m3 (295 K) y 2041 kg/m3 (423 K)",
-    "kg/m3", 295.0, 600.0, "Blumm et al. (2010)", "acotado",
+    "kg/m3", 295.0, 600.0, "Blumm et al. (2010)", "acotado", cierre="fisica",
     nota="Extrapolación lineal declarada entre 423 y 600 K.",
 )
 
 cp_s_corr = Correlacion(
     "cp_s(T)", "514.97 + 1.563 T", "J/(kg K)", 298.0, 600.0,
-    "Ou et al. (2022); dentro de ±4 % de Blumm et al. (2010)", "acotado",
+    "Ou et al. (2022); dentro de ±4 % de Blumm et al. (2010)", "acotado", cierre="fisica",
 )
 
 a_s = Param(
     "a_s, difusividad térmica del sólido", 1.22e-7, "m2/s",
-    "Blumm et al. (2010); Price & Jarratt (2002)", "acotado",
+    "Blumm et al. (2010); Price & Jarratt (2002)", "acotado", cierre="fisica",
     rango=(1.07e-7, 1.35e-7),
     nota="Constante en T: las mediciones varían -2 a -7 % entre 323 y 505 K.",
 )
 
 C_L = Param(
     "C_L, velocidad longitudinal (294 K, 5 MHz)", 1312.0, "m/s",
-    "Rae & Brown (2016)", "anclado", rango=(1312.0, 1410.0),
+    "Rae & Brown (2016)", "anclado", cierre="fisica", rango=(1312.0, 1410.0),
     nota="Incertidumbre experimental ±5 m/s; rango entre fuentes 1312-1410 m/s.",
 )
 
 C_T = Param(
     "C_T, velocidad transversal (294 K, 5 MHz)", 518.0, "m/s",
-    "Rae & Brown (2016)", "anclado", rango=(517.0, 519.0),
+    "Rae & Brown (2016)", "anclado", cierre="fisica", rango=(517.0, 519.0),
 )
 
 Hm = Param(
     "Hm, entalpía de fusión", 40.6e3, "J/kg",
-    "Blumm et al. (2010)", "acotado", rango=(40.6e3, 58.6e3),
+    "Blumm et al. (2010)", "acotado", cierre="fisica", rango=(40.6e3, 58.6e3),
     nota="Variante: 58.6 kJ/kg (Wu et al., 2025), compatible con ~60 % de cristalinidad.",
 )
 
 H_transicion_II_IV = Param(
     "Entalpía de las transiciones sólido-sólido (19-35 °C)", 7.76e3, "J/kg",
-    "Blumm et al. (2010)", "anclado",
+    "Blumm et al. (2010)", "anclado", cierre="fisica",
     nota="Se desprecia en el modelo (~0.3 % de Q*).",
 )
 
@@ -82,31 +82,31 @@ H_transicion_II_IV = Param(
 # ---------------------------------------------------------------------------
 rho_m_corr = Correlacion(
     "rho_m(T)", "1/V0, V0 = 0.3200 + 9.586e-4 T(°C) cm3/g", "kg/m3",
-    603.15, 643.15, "Zoller (1978) vía Starkweather et al. (1982)", "anclado",
+    603.15, 643.15, "Zoller (1978) vía Starkweather et al. (1982)", "anclado", cierre="fisica",
     nota="Fuera de 330-370 °C es extrapolación declarada.",
 )
 
 kappa_m_corr = Correlacion(
     "kappa_T,m(T)", "2.06e-5 exp(9.38e-3 T(°C)) cm2/kgf", "1/Pa",
-    603.15, 643.15, "Zoller (1978) vía Starkweather et al. (1982)", "anclado",
+    603.15, 643.15, "Zoller (1978) vía Starkweather et al. (1982)", "anclado", cierre="fisica",
 )
 
 cp_m_corr = Correlacion(
     "cp_m(T)", "1065 + 0.653 T", "J/(kg K)", 600.0, 640.0,
     "Pendiente de Wu et al. (2025), anclada a ~1.47 J/(g K) en Tm (Blumm et al., 2010)",
-    "acotado", nota="Por encima de ~640 K es extrapolación declarada.",
+    "acotado", cierre="fisica", nota="Por encima de ~640 K es extrapolación declarada.",
 )
 
 lambda_m = Param(
     "lambda_m, conductividad del fundido", 0.245, "W/(m K)",
     "Wu et al. (2025), función lambda_a(Tm); origen probable Arai (1979)",
-    "supuesto", rango=(0.135, 0.36),
+    "supuesto", cierre="escenario", rango=(0.135, 0.36),
     nota="Sin medición primaria verificada: entra al análisis de sensibilidad.",
 )
 
 s_ef_m = Param(
     "s_ef,m, velocidad efectiva del fundido a frecuencia térmica", 291.0, "m/s",
-    "Estimación de la tesis (Sec. 2.3)", "estimado", rango=(227.0, 510.0),
+    "Estimación de la tesis (Sec. 2.3)", "estimado", cierre="fisica", rango=(227.0, 510.0),
 )
 
 # ---------------------------------------------------------------------------
@@ -115,12 +115,12 @@ s_ef_m = Param(
 tau0_s = Param(
     "tau0,s, tiempo de relajación del sólido (~530 K)", 7.5e-13, "s",
     "Tesis: Chester (1963) generalizado, entradas de Rae & Brown (2016)",
-    "estimado", rango=(2.2e-13, 4.8e-12),
+    "estimado", cierre="fisica", rango=(2.2e-13, 4.8e-12),
 )
 
 tau0_m = Param(
     "tau0,m, tiempo de relajación del fundido", 1.8e-12, "s",
-    "Tesis: modelo de dos canales (Sec. 2.3)", "estimado",
+    "Tesis: modelo de dos canales (Sec. 2.3)", "estimado", cierre="fisica",
     rango=(2.5e-13, 2.3e-12),
 )
 
@@ -129,14 +129,14 @@ tau0_m = Param(
 # ---------------------------------------------------------------------------
 KINETICA = {
     "madorsky": dict(
-        Ap=Param("Ap (Madorsky)", 4.7e18, "1/s", "Madorsky et al. (1953)", "anclado"),
+        Ap=Param("Ap (Madorsky)", 4.7e18, "1/s", "Madorsky et al. (1953)", "anclado", cierre="fisica"),
         Bp=Param("Bp (Madorsky)", 40511.0, "K",
-                 "Madorsky et al. (1953): Ea = 80.5 kcal/mol", "anclado",
+                 "Madorsky et al. (1953): Ea = 80.5 kcal/mol", "anclado", cierre="fisica",
                  nota="Medida entre 697 y 786 K; el modelo la extrapola hasta ~2000 K."),
     ),
     "wu_tabla_5_2": dict(
-        Ap=Param("Ap (Wu, Tabla 5.2)", 3.1e19, "1/s", "Wu et al. (2025), Tabla 5.2", "acotado"),
-        Bp=Param("Bp (Wu, Tabla 5.2)", 41769.0, "K", "Wu et al. (2025), Tabla 5.2", "acotado"),
+        Ap=Param("Ap (Wu, Tabla 5.2)", 3.1e19, "1/s", "Wu et al. (2025), Tabla 5.2", "acotado", cierre="calibrado"),
+        Bp=Param("Bp (Wu, Tabla 5.2)", 41769.0, "K", "Wu et al. (2025), Tabla 5.2", "acotado", cierre="calibrado"),
     ),
 }
 KINETICA_CENTRAL = "madorsky"
@@ -162,7 +162,7 @@ CP_GAS_C2F4 = (
 cp_gas_estatus = Param(
     "cp del C2F4 gaseoso (tabla)", 115.6, "J/(mol K)",
     "NIST-JANAF (Chase, 1998); puntos distintos de 800 K provisionales",
-    "por_verificar",
+    "por_verificar", cierre="fisica",
 )
 
 # ---------------------------------------------------------------------------
@@ -170,29 +170,29 @@ cp_gas_estatus = Param(
 # ---------------------------------------------------------------------------
 beta_ef = Param(
     "beta_ef, fracción absorbida efectiva", 0.8, "-",
-    "Supuesto de escenario (Sec. 2.4)", "supuesto", rango=(0.7, 0.9),
+    "Supuesto de escenario (Sec. 2.4)", "supuesto", cierre="escenario", rango=(0.7, 0.9),
 )
 
 alpha_1064_cota = Param(
     "alpha a 1064 nm, cota superior en PTFE sinterizado", 2.0e2, "1/m",
-    "Estimada de Huber, Heitz & Bäuerle (2004)", "estimado", rango=(1.0e2, 3.0e2),
+    "Estimada de Huber, Heitz & Bäuerle (2004)", "estimado", cierre="fisica", rango=(1.0e2, 3.0e2),
     nota="Equivale a 1-3 cm^-1. El 0.22 cm^-1 de Wu et al. no está medido a 1064 nm.",
 )
 
 n_refraccion = Param(
     "n, índice de refracción", 1.35, "-", "Literatura general (Sec. 3.4)",
-    "acotado", rango=(1.35, 1.37),
+    "acotado", cierre="fisica", rango=(1.35, 1.37),
 )
 
 F_umbral_1064 = Param(
     "Fluencia umbral de ablación a 1064 nm (PTFE sinterizado, 5 ns)", 3.0e4, "J/m2",
-    "Huber, Heitz & Bäuerle (2004)", "anclado",
+    "Huber, Heitz & Bäuerle (2004)", "anclado", cierre="referencia",
     nota="3 J/cm^2; régimen fuera de la ventana del modelo continuo.",
 )
 
 rho0 = Param(
     "rho0, densidad de referencia para la recesión", 2161.0, "kg/m3",
-    "Sólido virgen, Blumm et al. (2010)", "acotado", rango=(1933.0, 2161.0),
+    "Sólido virgen, Blumm et al. (2010)", "acotado", cierre="fisica", rango=(1933.0, 2161.0),
     nota="Variante 1933 kg/m3 (Wu et al., 2025): ~12 % de diferencia en v.",
 )
 
@@ -201,11 +201,11 @@ rho0 = Param(
 # ---------------------------------------------------------------------------
 piel_minima = Param(
     "Espesor mínimo de la piel de reacción", 1.0e-9, "m",
-    "Criterio declarado de la tesis (~8 unidades CF2)", "supuesto",
+    "Criterio declarado de la tesis (~8 unidades CF2)", "supuesto", cierre="escenario",
 )
 I0_max_ventana = Param(
     "Intensidad máxima de validez", 2.0e10, "W/m2",
-    "Tesis (Sec. 2.4)", "estimado", rango=(2.0e10, 3.0e10),
+    "Tesis (Sec. 2.4)", "estimado", cierre="fisica", rango=(2.0e10, 3.0e10),
 )
 
 

@@ -62,6 +62,11 @@ def main():
     # Q* hasta 800-1000 K usado en la Sec. 3.4 (con Hm y cp_m de Wu daba 2.2-2.5 MJ/kg)
     print(f"[INFO] Q*(800 K) = {P.Q_estrella(800.0)/1e6:.2f} MJ/kg, "
           f"Q*(1000 K) = {P.Q_estrella(1000.0)/1e6:.2f} MJ/kg con el conjunto adoptado")
+    # Principio de no circularidad: el caso central no usa parámetros calibrados
+    central = P.KINETICA[P.KINETICA_CENTRAL]
+    sin_calibrar = all(p.cierre != "calibrado" for p in central.values())
+    print(f"[{'OK ' if sin_calibrar else 'FALLA'}] la cinética central no está calibrada contra ablación")
+    ok.append(sin_calibrar)
     print(f"\n{sum(ok)}/{len(ok)} comprobaciones dentro de tolerancia")
     return all(ok)
 
